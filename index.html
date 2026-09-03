@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Digital Muse Studio — Image Tools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/upscaler@1.0.0-beta.19/dist/browser/umd/upscaler.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@upscalerjs/esrgan-slim@1.0.0-beta.12/dist/umd/2x/esrgan-slim.min.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "@imgly/background-removal": "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/dist/index.mjs"
+  }
+}
+</script>
+<style>
+  :root{
+    --plum:#330530;
+    --plum-light:#4a0a45;
+    --gold:#FAC775;
+    --gold-deep:#BA7517;
+    --lavender:#F4E3FD;
+    --paper:#FFF1FE;
+    --ink:#2a0a28;
+    --ink-soft:#6b4a68;
+    --line:rgba(51,5,48,0.12);
+    --white:#ffffff;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Inter',sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{
+    max-width:920px;
+    margin:0 auto;
+    padding:48px 24px 80px;
+  }
+  .masthead{
+    text-align:center;
+    margin-bottom:40px;
+  }
+  .masthead .kicker{
+    font-size:12px;
+    letter-spacing:0.14em;
+    color:var(--gold-deep);
+    text-transform:uppercase;
+    margin-bottom:10px;
+  }
+  .masthead h1{
+    font-family:'Cormorant Garamond',serif;
+    font-weight:600;
+    font-size:40px;
+    line-height:1.15;
+    margin:0 0 10px;
+    color:var(--plum);
+  }
+  .masthead p{
+    font-size:15px;
+    color:var(--ink-soft);
+    max-width:440px;
+    margin:0 auto;
+    line-height:1.6;
+  }
+  .tabbar{
+    display:flex;
+    gap:8px;
+    justify-content:center;
+    margin-bottom:36px;
+  }
+  .tabbar button{
+    font-family:'Inter',sans-serif;
+    font-size:13px;
+    font-weight:500;
+    padding:11px 24px;
+    border-radius:999px;
+    border:1px solid var(--line);
+    background:var(--white);
+    color:var(--ink-soft);
+    cursor:pointer;
+    transition:background .15s ease,color .15s ease,border-color .15s ease;
+  }
+  .tabbar button.active{
+    background:var(--plum);
+    border-color:var(--plum);
+    color:var(--gold);
+  }
+  .tabbar button:not(.active):hover{
+    border-color:var(--plum);
+    color:var(--plum);
+  }
+  .panel{display:none;}
+  .panel.active{display:block;}
+
+  .dropzone{
+    border:1.5px dashed var(--line);
+    border-radius:16px;
+    background:var(--white);
+    padding:56px 24px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .dropzone:hover, .dropzone.drag{
+    border-color:var(--gold-deep);
+    background:var(--lavender);
+  }
+  .dropzone .icon{
+    width:52px;height:52px;
+    margin:0 auto 16px;
+    border-radius:50%;
+    background:var(--lavender);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .dropzone .icon svg{width:24px;height:24px;stroke:var(--plum);}
+  .dropzone .title{font-size:15px;font-weight:500;color:var(--plum);margin-bottom:4px;}
+  .dropzone .sub{font-size:13px;color:var(--ink-soft);}
+  input[type=file]{display:none;}
+
+  .options-row{
+    display:flex;
+    gap:12px;
+    justify-content:center;
+    margin-top:24px;
+    flex-wrap:wrap;
+  }
+  .chip{
+    font-size:13px;
+    font-weight:500;
+    padding:9px 18px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    background:var(--white);
+    color:var(--ink-soft);
+    cursor:pointer;
+  }
+  .chip.active{
+    border-color:var(--plum);
+    background:var(--plum);
+    color:var(--gold);
+  }
+
+  .go-btn{
+    display:block;
+    margin:28px auto 0;
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    font-weight:600;
+    padding:14px 38px;
+    border-radius:10px;
+    border:none;
+    background:var(--plum);
+    color:var(--gold);
+    cursor:pointer;
+    transition:background .15s ease, transform .1s ease;
+  }
+  .go-btn:hover:not(:disabled){background:var(--plum-light);}
+  .go-btn:active:not(:disabled){transform:scale(0.98);}
+  .go-btn:disabled{opacity:0.4;cursor:not-allowed;}
+
+  .stage{margin-top:32px;}
+  .stage.hidden{display:none;}
+
+  .progress-wrap{
+    background:var(--white);
+    border-radius:14px;
+    border:1px solid var(--line);
+    padding:32px;
+    text-align:center;
+  }
+  .progress-wrap .status{
+    font-size:14px;
+    font-weight:500;
+    color:var(--plum);
+    margin-bottom:14px;
+  }
+  .progress-wrap .note{
+    font-size:12.5px;
+    color:var(--ink-soft);
+    margin-top:12px;
+    line-height:1.6;
+  }
+  .bar-track{
+    height:6px;
+    background:var(--lavender);
+    border-radius:999px;
+    overflow:hidden;
+  }
+  .bar-fill{
+    height:100%;
+    width:0%;
+    background:linear-gradient(90deg,var(--gold-deep),var(--gold));
+    border-radius:999px;
+    transition:width .25s ease;
+  }
+
+  .result-card{
+    background:var(--white);
+    border-radius:16px;
+    border:1px solid var(--line);
+    padding:24px;
+  }
+  .compare{
+    position:relative;
+    border-radius:12px;
+    overflow:hidden;
+    background:
+      repeating-conic-gradient(#eee 0% 25%, #fff 0% 50%) 50% / 20px 20px;
+    user-select:none;
+  }
+  .compare img{
+    display:block;
+    width:100%;
+    height:auto;
+  }
+  .compare .after-wrap{
+    position:absolute;
+    top:0;left:0;
+    height:100%;
+    width:50%;
+    overflow:hidden;
+    border-right:2px solid var(--gold);
+  }
+  .compare .after-wrap img{
+    width:var(--stage-w);
+    max-width:none;
+  }
+  .compare .handle{
+    position:absolute;
+    top:50%;
+    left:50%;
+    transform:translate(-50%,-50%);
+    width:36px;height:36px;
+    border-radius:50%;
+    background:var(--gold);
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 2px 8px rgba(0,0,0,0.25);
+    pointer-events:none;
+  }
+  .compare .handle svg{width:16px;height:16px;stroke:var(--plum);}
+  .compare-range{
+    width:100%;
+    margin-top:14px;
+    accent-color:var(--plum);
+  }
+  .compare-labels{
+    display:flex;justify-content:space-between;
+    font-size:11px;letter-spacing:0.08em;text-transform:uppercase;
+    color:var(--ink-soft);margin-top:6px;
+  }
+
+  .result-actions{
+    display:flex;
+    gap:10px;
+    justify-content:center;
+    margin-top:22px;
+    flex-wrap:wrap;
+  }
+  .btn-secondary{
+    font-family:'Inter',sans-serif;
+    font-size:13px;font-weight:500;
+    padding:11px 22px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    background:var(--white);
+    color:var(--plum);
+    cursor:pointer;
+  }
+  .btn-secondary:hover{border-color:var(--plum);}
+  .btn-download{
+    font-family:'Inter',sans-serif;
+    font-size:13px;font-weight:600;
+    padding:11px 26px;
+    border-radius:10px;
+    border:none;
+    background:var(--plum);
+    color:var(--gold);
+    cursor:pointer;
+  }
+  .btn-download:hover{background:var(--plum-light);}
+
+  .error-box{
+    background:#FCEBEB;
+    border:1px solid #F09595;
+    color:#791F1F;
+    font-size:13px;
+    padding:14px 18px;
+    border-radius:10px;
+    margin-top:20px;
+    line-height:1.6;
+  }
+
+  .filename{
+    text-align:center;
+    font-size:12.5px;
+    color:var(--ink-soft);
+    margin-top:14px;
+  }
+
+  @media (max-width:560px){
+    .masthead h1{font-size:30px;}
+    .dropzone{padding:40px 18px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="masthead">
+    <div class="kicker">Digital Muse Studio</div>
+    <h1>Image tools</h1>
+    <p>Upscale your images with real detail, or lift them cleanly off any background — right here in your browser.</p>
+  </div>
+
+  <div class="tabbar">
+    <button class="tab-btn active" data-tab="upscale">Upscale image</button>
+    <button class="tab-btn" data-tab="removebg">Remove background</button>
+  </div>
+
+  <!-- UPSCALE PANEL -->
+  <div class="panel active" id="panel-upscale">
+    <div class="dropzone" id="dropzone-up">
+      <input type="file" id="file-up" accept="image/png,image/jpeg,image/webp">
+      <div class="icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+      </div>
+      <div class="title">Drop an image, or click to choose one</div>
+      <div class="sub">PNG, JPG or WEBP · large photos are automatically resized so they process reliably</div>
+    </div>
+    <div class="filename" id="filename-up"></div>
+
+    <div class="options-row" id="scale-options">
+      <button class="chip active" data-scale="2">2× — sharper, faster</button>
+      <button class="chip" data-scale="4">4× — maximum detail</button>
+    </div>
+
+    <button class="go-btn" id="go-up" disabled>Upscale image</button>
+
+    <div class="stage hidden" id="stage-up-progress">
+      <div class="progress-wrap">
+        <div class="status" id="status-up">Loading the model…</div>
+        <div class="bar-track"><div class="bar-fill" id="bar-up"></div></div>
+        <div class="note">The first run downloads the AI model (a few seconds on most connections). It's cached after that, so the next image is quicker.</div>
+      </div>
+    </div>
+
+    <div class="stage hidden" id="stage-up-result">
+      <div class="result-card">
+        <div class="compare" id="compare-up">
+          <img id="img-up-after-full" alt="Upscaled result">
+          <div class="after-wrap" id="afterwrap-up">
+            <img id="img-up-before" alt="Original">
+          </div>
+          <div class="handle" style="left:50%"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/></svg></div>
+        </div>
+        <input type="range" class="compare-range" id="range-up" min="0" max="100" value="50">
+        <div class="compare-labels"><span>Original</span><span>Upscaled</span></div>
+        <div class="result-actions">
+          <button class="btn-secondary" id="reset-up">Try another image</button>
+          <button class="btn-download" id="download-up">Download upscaled PNG</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="error-box hidden" id="error-up"></div>
+  </div>
+
+  <!-- REMOVE BG PANEL -->
+  <div class="panel" id="panel-removebg">
+    <div class="dropzone" id="dropzone-bg">
+      <input type="file" id="file-bg" accept="image/png,image/jpeg,image/webp">
+      <div class="icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg>
+      </div>
+      <div class="title">Drop an image, or click to choose one</div>
+      <div class="sub">Works best on product photos and portraits · large photos are automatically resized</div>
+    </div>
+    <div class="filename" id="filename-bg"></div>
+
+    <button class="go-btn" id="go-bg" disabled>Remove background</button>
+
+    <div class="stage hidden" id="stage-bg-progress">
+      <div class="progress-wrap">
+        <div class="status" id="status-bg">Loading the model…</div>
+        <div class="bar-track"><div class="bar-fill" id="bar-bg"></div></div>
+        <div class="note">The first run downloads the segmentation model. It runs entirely in your browser — nothing is uploaded anywhere.</div>
+      </div>
+    </div>
+
+    <div class="stage hidden" id="stage-bg-result">
+      <div class="result-card">
+        <div class="compare" id="compare-bg">
+          <img id="img-bg-after-full" alt="Background removed">
+          <div class="after-wrap" id="afterwrap-bg">
+            <img id="img-bg-before" alt="Original">
+          </div>
+          <div class="handle" style="left:50%"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/></svg></div>
+        </div>
+        <input type="range" class="compare-range" id="range-bg" min="0" max="100" value="50">
+        <div class="compare-labels"><span>Original</span><span>Cut out</span></div>
+        <div class="result-actions">
+          <button class="btn-secondary" id="reset-bg">Try another image</button>
+          <button class="btn-download" id="download-bg">Download PNG (transparent)</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="error-box hidden" id="error-bg"></div>
+  </div>
+
+</div>
+
+<script>
+  // ---------- Tab switching ----------
+  document.querySelectorAll('.tab-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('panel-'+btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  // ---------- Shared helpers ----------
+  function fileToImage(file){
+    return new Promise((resolve,reject)=>{
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = ()=>resolve({img,url});
+      img.onerror = reject;
+      img.src = url;
+    });
+  }
+
+  // Large photos (phone camera photos are often 3000-4000px+) crash or
+  // silently fail in-browser AI models. This brings any oversized image
+  // down to a safe working size before it ever reaches the model, and
+  // returns a fresh object URL + image for that resized version so the
+  // "before" preview and the model both use the same safe-size source.
+  const MAX_INPUT_DIMENSION = 1200;
+
+  async function loadAndCapImage(file){
+    const {img, url} = await fileToImage(file);
+    const longest = Math.max(img.width, img.height);
+
+    if(longest <= MAX_INPUT_DIMENSION){
+      return {img, url, wasResized:false, originalWidth:img.width, originalHeight:img.height};
+    }
+
+    const scale = MAX_INPUT_DIMENSION / longest;
+    const targetW = Math.round(img.width * scale);
+    const targetH = Math.round(img.height * scale);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = targetW;
+    canvas.height = targetH;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, targetW, targetH);
+
+    URL.revokeObjectURL(url);
+
+    const resizedUrl = canvas.toDataURL('image/png');
+    const resizedImg = await new Promise((resolve,reject)=>{
+      const im = new Image();
+      im.onload = ()=>resolve(im);
+      im.onerror = reject;
+      im.src = resizedUrl;
+    });
+
+    return {
+      img: resizedImg,
+      url: resizedUrl,
+      wasResized: true,
+      originalWidth: img.width,
+      originalHeight: img.height
+    };
+  }
+
+  function setupCompareSlider(rangeEl, afterWrapEl, afterFullImgEl){
+    const update = (val)=>{
+      afterWrapEl.style.width = val+'%';
+      const handle = afterWrapEl.parentElement.querySelector('.handle');
+      handle.style.left = val+'%';
+    };
+    rangeEl.addEventListener('input',()=>update(rangeEl.value));
+    update(rangeEl.value);
+  }
+
+  function downloadCanvas(canvas, filename){
+    canvas.toBlob(blob=>{
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+    },'image/png');
+  }
+
+  // ================= UPSCALE =================
+  (function(){
+    const dropzone = document.getElementById('dropzone-up');
+    const fileInput = document.getElementById('file-up');
+    const filenameEl = document.getElementById('filename-up');
+    const goBtn = document.getElementById('go-up');
+    const scaleOptions = document.getElementById('scale-options');
+    const stageProgress = document.getElementById('stage-up-progress');
+    const stageResult = document.getElementById('stage-up-result');
+    const statusEl = document.getElementById('status-up');
+    const barEl = document.getElementById('bar-up');
+    const errorEl = document.getElementById('error-up');
+    const resetBtn = document.getElementById('reset-up');
+    const downloadBtn = document.getElementById('download-up');
+
+    let currentFile = null;
+    let currentScale = 2;
+    let upscalerInstance = null;
+    let resultCanvas = null;
+
+    scaleOptions.querySelectorAll('.chip').forEach(chip=>{
+      chip.addEventListener('click',()=>{
+        scaleOptions.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+        chip.classList.add('active');
+        currentScale = parseInt(chip.dataset.scale,10);
+      });
+    });
+
+    function handleFile(file){
+      if(!file) return;
+      currentFile = file;
+      filenameEl.textContent = file.name;
+      goBtn.disabled = false;
+      errorEl.classList.add('hidden');
+      stageResult.classList.add('hidden');
+    }
+
+    dropzone.addEventListener('click',()=>fileInput.click());
+    fileInput.addEventListener('change',e=>handleFile(e.target.files[0]));
+    ['dragover','dragenter'].forEach(evt=>{
+      dropzone.addEventListener(evt,e=>{e.preventDefault();dropzone.classList.add('drag');});
+    });
+    ['dragleave','drop'].forEach(evt=>{
+      dropzone.addEventListener(evt,e=>{e.preventDefault();dropzone.classList.remove('drag');});
+    });
+    dropzone.addEventListener('drop',e=>{
+      const file = e.dataTransfer.files[0];
+      handleFile(file);
+    });
+
+    resetBtn.addEventListener('click',()=>{
+      stageResult.classList.add('hidden');
+      currentFile = null;
+      goBtn.disabled = true;
+      filenameEl.textContent = '';
+      fileInput.value = '';
+    });
+
+    downloadBtn.addEventListener('click',()=>{
+      if(resultCanvas) downloadCanvas(resultCanvas,'upscaled-'+currentScale+'x.png');
+    });
+
+    goBtn.addEventListener('click', async ()=>{
+      if(!currentFile) return;
+      errorEl.classList.add('hidden');
+      stageResult.classList.add('hidden');
+      stageProgress.classList.remove('hidden');
+      barEl.style.width='8%';
+      statusEl.textContent = 'Loading the AI model…';
+      goBtn.disabled = true;
+
+      try{
+        const {img, url, wasResized, originalWidth, originalHeight} = await loadAndCapImage(currentFile);
+
+        if(wasResized){
+          statusEl.textContent = `Large photo detected (${originalWidth}×${originalHeight}) — working from a ${img.width}×${img.height} version so your browser doesn't run out of memory…`;
+          barEl.style.width='16%';
+          await new Promise(r=>setTimeout(r,900));
+        }
+
+        if(!upscalerInstance){
+          upscalerInstance = new Upscaler({
+            model: window['esrgan-slim']['2x']
+          });
+        }
+        barEl.style.width='28%';
+        statusEl.textContent = 'Analyzing image detail…';
+
+        // Run the model. For 4x we run the 2x model twice for genuine
+        // compounded detail recovery rather than a single stretched pass.
+        const passes = currentScale === 4 ? 2 : 1;
+        let sourceForModel = img;
+
+        for(let p=0;p<passes;p++){
+          statusEl.textContent = passes>1 ? `Rebuilding detail — pass ${p+1} of ${passes}…` : 'Rebuilding detail…';
+          barEl.style.width = (30 + (p+1)*(55/passes)) + '%';
+          const upscaledSrc = await upscalerInstance.upscale(sourceForModel, {
+            output: 'base64',
+            patchSize: 64,
+            padding: 6,
+            progress: (rate)=>{
+              const base = 30 + p*(55/passes);
+              barEl.style.width = (base + rate*(55/passes)) + '%';
+            }
+          });
+          const {img: newImg} = await new Promise((resolve,reject)=>{
+            const im = new Image();
+            im.onload = ()=>resolve({img:im});
+            im.onerror = reject;
+            im.src = upscaledSrc;
+          });
+          sourceForModel = newImg;
+        }
+
+        barEl.style.width='95%';
+        statusEl.textContent='Finishing up…';
+
+        // Draw final result to canvas at its native (already upscaled) size
+        const canvas = document.createElement('canvas');
+        canvas.width = sourceForModel.width;
+        canvas.height = sourceForModel.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(sourceForModel,0,0);
+        resultCanvas = canvas;
+
+        const afterDataUrl = canvas.toDataURL('image/png');
+
+        document.getElementById('img-up-after-full').src = afterDataUrl;
+        document.getElementById('img-up-before').src = url;
+        document.getElementById('afterwrap-up').querySelector('img').style.width =
+          canvas.width + 'px';
+        document.getElementById('compare-up').style.setProperty('--stage-w', canvas.width+'px');
+
+        setupCompareSlider(
+          document.getElementById('range-up'),
+          document.getElementById('afterwrap-up'),
+          document.getElementById('img-up-after-full')
+        );
+
+        barEl.style.width='100%';
+        setTimeout(()=>{
+          stageProgress.classList.add('hidden');
+          stageResult.classList.remove('hidden');
+          goBtn.disabled = false;
+        },300);
+
+      }catch(err){
+        console.error(err);
+        stageProgress.classList.add('hidden');
+        errorEl.textContent = "This image couldn't be upscaled. It may be an unsupported format, or your browser ran low on memory — try closing other tabs, or use a smaller photo.";
+        errorEl.classList.remove('hidden');
+        goBtn.disabled = false;
+      }
+    });
+  })();
+
+  // ================= REMOVE BACKGROUND =================
+  (function(){
+    const dropzone = document.getElementById('dropzone-bg');
+    const fileInput = document.getElementById('file-bg');
+    const filenameEl = document.getElementById('filename-bg');
+    const goBtn = document.getElementById('go-bg');
+    const stageProgress = document.getElementById('stage-bg-progress');
+    const stageResult = document.getElementById('stage-bg-result');
+    const statusEl = document.getElementById('status-bg');
+    const barEl = document.getElementById('bar-bg');
+    const errorEl = document.getElementById('error-bg');
+    const resetBtn = document.getElementById('reset-bg');
+    const downloadBtn = document.getElementById('download-bg');
+
+    let currentFile = null;
+    let resultBlobUrl = null;
+    let removeBackgroundFn = null;
+
+    function handleFile(file){
+      if(!file) return;
+      currentFile = file;
+      filenameEl.textContent = file.name;
+      goBtn.disabled = false;
+      errorEl.classList.add('hidden');
+      stageResult.classList.add('hidden');
+    }
+
+    dropzone.addEventListener('click',()=>fileInput.click());
+    fileInput.addEventListener('change',e=>handleFile(e.target.files[0]));
+    ['dragover','dragenter'].forEach(evt=>{
+      dropzone.addEventListener(evt,e=>{e.preventDefault();dropzone.classList.add('drag');});
+    });
+    ['dragleave','drop'].forEach(evt=>{
+      dropzone.addEventListener(evt,e=>{e.preventDefault();dropzone.classList.remove('drag');});
+    });
+    dropzone.addEventListener('drop',e=>{
+      const file = e.dataTransfer.files[0];
+      handleFile(file);
+    });
+
+    resetBtn.addEventListener('click',()=>{
+      stageResult.classList.add('hidden');
+      currentFile = null;
+      goBtn.disabled = true;
+      filenameEl.textContent = '';
+      fileInput.value='';
+    });
+
+    downloadBtn.addEventListener('click',()=>{
+      if(resultBlobUrl){
+        const a = document.createElement('a');
+        a.href = resultBlobUrl;
+        a.download = 'cutout.png';
+        a.click();
+      }
+    });
+
+    goBtn.addEventListener('click', async ()=>{
+      if(!currentFile) return;
+      errorEl.classList.add('hidden');
+      stageResult.classList.add('hidden');
+      stageProgress.classList.remove('hidden');
+      barEl.style.width='8%';
+      statusEl.textContent='Loading the segmentation model…';
+      goBtn.disabled = true;
+
+      try{
+        const {img, url:beforeUrlCapped, wasResized, originalWidth, originalHeight} = await loadAndCapImage(currentFile);
+
+        if(wasResized){
+          statusEl.textContent = `Large photo detected (${originalWidth}×${originalHeight}) — working from a ${img.width}×${img.height} version so your browser doesn't run out of memory…`;
+          barEl.style.width='14%';
+          await new Promise(r=>setTimeout(r,900));
+        }
+
+        // Convert the (possibly resized) image into a blob so
+        // @imgly/background-removal always receives a safe-size input.
+        const inputCanvas = document.createElement('canvas');
+        inputCanvas.width = img.width;
+        inputCanvas.height = img.height;
+        inputCanvas.getContext('2d').drawImage(img,0,0);
+        const inputBlob = await new Promise(resolve=>inputCanvas.toBlob(resolve,'image/png'));
+
+        if(!removeBackgroundFn){
+          const mod = await import('@imgly/background-removal');
+          removeBackgroundFn = mod.removeBackground || mod.default;
+        }
+
+        barEl.style.width='25%';
+        statusEl.textContent='Finding the subject…';
+
+        const resultBlob = await removeBackgroundFn(inputBlob, {
+          progress: (key, current, total)=>{
+            const pct = total ? Math.min(90, 25 + (current/total)*60) : 60;
+            barEl.style.width = pct+'%';
+            statusEl.textContent = 'Cutting out the background…';
+          }
+        });
+
+        barEl.style.width='95%';
+        statusEl.textContent='Finishing up…';
+
+        resultBlobUrl = URL.createObjectURL(resultBlob);
+
+        document.getElementById('img-bg-after-full').src = resultBlobUrl;
+        document.getElementById('img-bg-before').src = beforeUrlCapped;
+
+        const afterImg = new Image();
+        afterImg.onload = ()=>{
+          document.getElementById('afterwrap-bg').querySelector('img').style.width = afterImg.width+'px';
+          document.getElementById('compare-bg').style.setProperty('--stage-w', afterImg.width+'px');
+        };
+        afterImg.src = resultBlobUrl;
+
+        setupCompareSlider(
+          document.getElementById('range-bg'),
+          document.getElementById('afterwrap-bg'),
+          document.getElementById('img-bg-after-full')
+        );
+
+        barEl.style.width='100%';
+        setTimeout(()=>{
+          stageProgress.classList.add('hidden');
+          stageResult.classList.remove('hidden');
+          goBtn.disabled = false;
+        },300);
+
+      }catch(err){
+        console.error(err);
+        stageProgress.classList.add('hidden');
+        errorEl.textContent = "The background couldn't be removed. It may be an unsupported format, or your browser ran low on memory — try closing other tabs, or use a different photo.";
+        errorEl.classList.remove('hidden');
+        goBtn.disabled = false;
+      }
+    });
+  })();
+</script>
+
+</body>
+</html>
