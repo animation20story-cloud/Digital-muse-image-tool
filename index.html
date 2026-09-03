@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Digital Muse Studio — AI Image Tools</title>
+<style>
+:root{--pink:#fcc0c5;--cream:#fff6f6;--ink:#2b2023;--muted:#806d71;--line:#eadadd;--white:#fff}
+*{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:980px;margin:auto;padding:22px 16px 48px}.brand{text-align:center;margin:8px 0 24px}
+.brand b{font-size:27px;letter-spacing:-.7px}.brand span{display:block;color:var(--muted);font-size:13px;margin-top:5px}
+.card{background:#fff;border:1px solid var(--line);border-radius:24px;box-shadow:0 12px 35px #8b596011;overflow:hidden}
+.tabs{display:flex;border-bottom:1px solid var(--line)}button{font:inherit}.tab{flex:1;border:0;background:#fff;padding:17px 12px;font-weight:800;cursor:pointer;color:var(--muted)}.tab.active{background:var(--pink);color:var(--ink)}
+.panel{padding:22px}.hidden{display:none}
+.drop{position:relative;border:2px dashed #d8aeb4;border-radius:20px;padding:32px 18px;text-align:center;background:#fffafb;min-height:210px;display:flex;align-items:center;justify-content:center}
+.drop input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.drop strong{display:block;font-size:18px}.drop small{display:block;color:var(--muted);margin:7px 0 15px}
+.pick{display:inline-block;background:var(--ink);color:#fff;padding:11px 18px;border-radius:999px;font-weight:800}
+.preview{margin-top:16px;display:none;border:1px solid var(--line);border-radius:18px;padding:12px;background:#fff}
+.preview img{display:block;width:100%;max-height:360px;object-fit:contain;border-radius:12px;background:repeating-conic-gradient(#eee 0 25%,#fff 0 50%) 50%/20px 20px}
+.meta{display:flex;justify-content:space-between;gap:10px;margin-top:9px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}.control{border:1px solid var(--line);border-radius:16px;padding:13px;background:#fff}
+label{font-size:12px;font-weight:800;color:var(--muted);display:block;margin-bottom:7px}select{width:100%;padding:11px;border:1px solid var(--line);border-radius:11px;background:#fff}
+.action{width:100%;margin-top:16px;border:0;border-radius:14px;padding:14px;background:var(--ink);color:#fff;font-weight:900;cursor:pointer}.action:disabled{opacity:.45;cursor:not-allowed}
+.status{margin-top:14px;border-radius:14px;padding:12px;background:#faf3f4;font-size:13px;display:none}.status.show{display:block}.status.error{background:#fff0f0;color:#9b3030}
+.result{margin-top:18px;display:none}.result h3{font-size:15px;margin:0 0 9px}.result img{width:100%;max-height:500px;object-fit:contain;border:1px solid var(--line);border-radius:16px;background:repeating-conic-gradient(#eee 0 25%,#fff 0 50%) 50%/20px 20px}.download{display:inline-block;margin-top:11px;padding:11px 16px;border-radius:999px;background:var(--pink);color:var(--ink);font-weight:900;text-decoration:none}
+.note{font-size:12px;color:var(--muted);line-height:1.5;margin-top:15px}.badge{display:inline-block;padding:4px 8px;border-radius:999px;background:#f8e2e5;font-size:11px;font-weight:800}
+@media(max-width:650px){.controls{grid-template-columns:1fr}.panel{padding:15px}.drop{min-height:190px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="brand"><b>Digital Muse Studio</b><span>AI Image Tools · Prototype</span></header>
+  <main class="card">
+    <nav class="tabs">
+      <button class="tab active" data-mode="upscale">✨ AI Upscaler</button>
+      <button class="tab" data-mode="background">✂️ Background Remover</button>
+    </nav>
+
+    <section class="panel">
+      <div class="drop" id="drop">
+        <input id="file" type="file" accept="image/*">
+        <div>
+          <strong>Upload your image</strong>
+          <small>PNG, JPG, WEBP · large images supported by the UI</small>
+          <span class="pick">Choose image</span>
+        </div>
+      </div>
+
+      <div class="preview" id="preview">
+        <img id="sourceImg" alt="Selected image preview">
+        <div class="meta"><span id="fileName"></span><span id="fileSize"></span><span class="badge">✓ Image ready to process</span></div>
+      </div>
+
+      <div id="upscaleControls" class="controls">
+        <div class="control"><label>UPSCALE</label><select id="scale"><option value="2">2×</option><option value="4">4×</option></select></div>
+        <div class="control"><label>PROCESSING</label><div style="font-size:13px;padding:10px 0">Server-side AI when deployed</div></div>
+      </div>
+
+      <button class="action" id="process" disabled>✨ Process with AI</button>
+      <div class="status" id="status"></div>
+
+      <div class="result" id="result">
+        <h3>Result</h3>
+        <img id="resultImg" alt="Processed result">
+        <a class="download" id="download" download="digital-muse-result.png">Download PNG</a>
+      </div>
+
+      <p class="note"><b>Prototype behavior:</b> this standalone file proves the upload/preview interface and is wired for the Vercel AI backend. When this exact frontend is hosted beside the included API files, processing uses real server-side AI rather than a fake canvas resize.</p>
+    </section>
+  </main>
+</div>
+
+<script>
+const state={mode:'upscale',file:null};
+const fileEl=document.getElementById('file'), preview=document.getElementById('preview'),
+source=document.getElementById('sourceImg'), processBtn=document.getElementById('process'),
+statusEl=document.getElementById('status'), result=document.getElementById('result'),
+resultImg=document.getElementById('resultImg'), download=document.getElementById('download');
+
+function setStatus(msg,error=false){statusEl.textContent=msg;statusEl.className='status show'+(error?' error':'')}
+function fmt(n){return n<1048576?(n/1024).toFixed(1)+' KB':(n/1048576).toFixed(2)+' MB'}
+fileEl.addEventListener('change',()=>loadFile(fileEl.files?.[0]));
+function loadFile(file){
+  if(!file)return;
+  if(!file.type.startsWith('image/')){setStatus('Please choose an image file.',true);return}
+  state.file=file;
+  const reader=new FileReader();
+  reader.onload=()=>{source.src=reader.result;preview.style.display='block';processBtn.disabled=false;result.style.display='none';setStatus('Image loaded successfully. Ready for AI processing.')}
+  reader.onerror=()=>setStatus('The browser could not read this image.',true);
+  reader.readAsDataURL(file);
+}
+document.querySelectorAll('.tab').forEach(btn=>btn.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));btn.classList.add('active');
+  state.mode=btn.dataset.mode;
+  document.getElementById('upscaleControls').style.display=state.mode==='upscale'?'grid':'none';
+  processBtn.textContent=state.mode==='upscale'?'✨ Process with AI':'✂️ Remove Background with AI';
+  result.style.display='none';
+});
+processBtn.onclick=async()=>{
+  if(!state.file)return;
+  setStatus('Preparing secure server upload…');processBtn.disabled=true;
+  try{
+    const fd=new FormData();fd.append('file',state.file);fd.append('mode',state.mode);
+    if(state.mode==='upscale')fd.append('scale',document.getElementById('scale').value);
+    const r=await fetch('/api/start',{method:'POST',body:fd});
+    if(!r.ok)throw new Error('The AI backend is not connected to this standalone file yet. Deploy the Vercel project to enable processing.');
+    const job=await r.json();
+    setStatus('AI processing started…');
+    let done=false;
+    for(let i=0;i<120&&!done;i++){
+      await new Promise(x=>setTimeout(x,1500));
+      const s=await fetch('/api/status?id='+encodeURIComponent(job.id));
+      if(!s.ok)throw new Error('Could not read processing status.');
+      const data=await s.json();
+      if(data.status==='succeeded'){
+        const rr=await fetch('/api/result?id='+encodeURIComponent(job.id));
+        const out=await rr.json();showResult(out.url);done=true;
+      }else if(data.status==='failed'){throw new Error(data.error||'AI processing failed.')}
+      else setStatus('AI processing… '+(data.progress?Math.round(data.progress)+'%':''));
+    }
+    if(!done)throw new Error('Processing timed out. The server job may still be running.');
+  }catch(e){setStatus(e.message,true)}
+  finally{processBtn.disabled=false}
+};
+function showResult(url){resultImg.src=url;download.href=url;result.style.display='block';setStatus('Done — your AI result is ready.')}
+</script>
+</body>
+</html>
